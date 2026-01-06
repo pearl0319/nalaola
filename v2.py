@@ -23,6 +23,10 @@ import shutil
 # =========================
 st.set_page_config(page_title="날아올라 정산", layout="wide")
 
+pwd = st.text_input("비밀번호", type="password")
+
+if pwd != st.secrets["APP_PASSWORD"]:
+    st.stop()
     
 DATA_DIR = Path("data")
 EVENTS_DIR = DATA_DIR / "events"
