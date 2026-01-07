@@ -535,6 +535,52 @@ with tabs[3]:
         st.success("저장 완료!")
         st.rerun()
 
+# -------------------------
+# Tab: Receipts gallery
+# -------------------------
+with tabs[4]:
+    st.subheader("영수증 보기 (누적)")
+
+    if len(expenses) == 0:
+        st.info("등록된 지출이 없습니다.")
+        st.stop()
+
+    # 지출 선택(전체 보기 포함)
+    options = ["(전체 보기)"] + [
+        f'{e["expense_id"]} | {e["payer"]} | {e["item"]} | {int(e["amount"]):,}원'
+        for e in expenses
+    ]
+    sel = st.selectbox("지출 선택", options, index=0)
+
+    show_list = expenses
+    if sel != "(전체 보기)":
+        idx = options.index(sel) - 1
+        show_list = [expenses[idx]]
+
+    # 카드처럼 출력
+    for e in show_list:
+        st.markdown(f"### {e['payer']} · {e['item']} · {int(e['amount']):,}원")
+        st.caption(f"expense_id: {e['expense_id']}  |  날짜: {e.get('created_at','')}")
+        if e.get("note"):
+            st.write(f"메모: {e['note']}")
+
+        paths = e.get("receipt_paths", [])
+        if not paths:
+            st.info("영수증이 없습니다.")
+            st.divider()
+            continue
+
+        # 이미지들을 누적 표시(그리드)
+        cols = st.columns(3)
+        for i, p in enumerate(paths):
+            path = Path(p)
+            if path.exists():
+                with cols[i % 3]:
+                    st.image(str(path), caption=path.name, use_container_width=True)
+            else:
+                st.warning(f"파일이 없어요: {p}")
+
+        st.divider()
 
 # In[ ]:
 
