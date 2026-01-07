@@ -221,65 +221,7 @@ def build_matrix_table(expenses: list, member_names: list):
     return df_total
 
 
-def compute_net(expenses: list, member_names: list):
-    """
-    net[사람] = (받을 돈) - (낼 돈)
-    - 결제자는 amount만큼 + (먼저 냈으니 받을 돈)
-    - 참석자는 share만큼 - (부담)
-    """
-    net = {m: 0.0 for m in member_names}
 
-    for e in expenses:
-        payer = e.get("payer", "")
-        amount = float(e.get("amount", 0))
-        participants = e.get("participants", [])
-        if not participants:
-            continue
-
-        share = amount / len(participants)
-
-        if payer in net:
-            net[payer] += amount
-        else:
-            # 결제자가 게스트일 수도 있으니 추가
-            net[payer] = amount
-
-        for p in participants:
-            if p not in net:
-                net[p] = 0.0
-            net[p] -= share
-
-    return net
-
-
-def compute_transfers(net: dict):
-    """net으로부터 송금 리스트 생성(그리디 매칭)"""
-    creditors = [(m, v) for m, v in net.items() if v > 1e-9]
-    debtors = [(m, -v) for m, v in net.items() if v < -1e-9]
-    creditors.sort(key=lambda x: x[1], reverse=True)
-    debtors.sort(key=lambda x: x[1], reverse=True)
-
-    transfers = []
-    i = j = 0
-    while i < len(debtors) and j < len(creditors):
-        d_name, d_amt = debtors[i]
-        c_name, c_amt = creditors[j]
-        pay = min(d_amt, c_amt)
-        transfers.append({"from": d_name, "to": c_name, "amount": round(pay, 0)})
-        d_amt -= pay
-        c_amt -= pay
-        debtors[i] = (d_name, d_amt)
-        creditors[j] = (c_name, c_amt)
-        if d_amt <= 1e-9:
-            i += 1
-        if c_amt <= 1e-9:
-            j += 1
-
-    return transfers
-
-
-def members_pay_to_map(members: list):
-    return {m["name"]: m.get("pay_to", "") for m in members}
 
 
 # =========================
@@ -339,7 +281,7 @@ if chosen == "(새로 만들기)":
 meta, members, expenses = load_event(event_id)
 member_names = [m["name"] for m in members]
 
-tabs = st.tabs(["➕ 지출(영수증) 추가", "📊 정산표", "💸 송금/계좌", "👥 멤버/계좌 관리", "🧾 영수증 보기"])
+tabs = st.tabs(["➕ 지출(영수증) 추가", "📊 정산표", "👥 멤버/계좌 관리", "🧾 영수증 보기"])
 
 # -------------------------
 # Tab: Add expense
@@ -460,48 +402,11 @@ with tabs[1]:
                 st.success(f"삭제 완료: {exp['expense_id']}")
                 st.rerun()
 
-# -------------------------
-# Tab: Transfers + accounts
-# -------------------------
-with tabs[2]:
-    st.subheader("송금/계좌(카카오페이) 안내")
-
-    if len(expenses) == 0:
-        st.info("지출을 먼저 추가하세요.")
-    else:
-        net = compute_net(expenses, member_names)
-        net_df = pd.DataFrame({"name": list(net.keys()), "net": list(net.values())}).sort_values("net", ascending=False)
-
-        st.write("**net > 0 : 받을 사람 / net < 0 : 보낼 사람**")
-        st.dataframe(net_df.assign(net=net_df["net"].map(lambda v: f"{v:,.0f}")), use_container_width=True)
-
-        transfers = compute_transfers(net)
-        pay_map = members_pay_to_map(members)
-
-        tdf = pd.DataFrame(transfers)
-        if len(tdf) == 0:
-            st.success("정산할 송금이 없습니다. (모두 균형)")
-        else:
-            # 수신자 계좌/카카오페이 정보 붙이기
-            tdf["to_pay_to"] = tdf["to"].map(lambda n: pay_map.get(n, ""))
-            tdf["amount"] = tdf["amount"].map(lambda v: f"{v:,.0f}")
-            st.subheader("송금 리스트")
-            st.dataframe(tdf, use_container_width=True)
-
-            csv2 = pd.DataFrame(transfers).to_csv(index=False).encode("utf-8-sig")
-            st.download_button(
-                "송금 리스트 CSV 다운로드",
-                data=csv2,
-                file_name=f'{meta.get("start","")}_{meta.get("end","")}_transfers.csv',
-                mime="text/csv",
-            )
-
-            st.info("표 하단에 있는 to_pay_to(계좌/카카오페이)로 보내면 됩니다.")
 
 # -------------------------
 # Tab: Members management
 # -------------------------
-with tabs[3]:
+with tabs[2]:
     st.subheader("멤버/계좌(카카오페이) 관리")
 
     st.write("멤버 추가/삭제, 그리고 각 멤버의 계좌번호/카카오페이 정보를 저장합니다.")
@@ -538,7 +443,7 @@ with tabs[3]:
 # -------------------------
 # Tab: Receipts gallery
 # -------------------------
-with tabs[4]:
+with tabs[3]:
     st.subheader("영수증 보기 (누적)")
 
     if len(expenses) == 0:
