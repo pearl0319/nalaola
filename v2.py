@@ -298,6 +298,14 @@ with tabs[0]:
         item = st.text_input("항목(예: 치킨, 술, 택시 등)")
         amount = st.number_input("금액", min_value=0, step=1000)
         participants = st.multiselect("참여자(나눌 사람들)", member_names, default=member_names)
+        new_participants_raw = st.text_input("추가 참여자 (쉼표로 구분, 예: 철수, 영희)",help="이번 지출에만 추가하거나 멤버로 자동 등록됩니다")
+        new_participants = []
+        if new_participants_raw.strip():
+            new_participants = [
+                p.strip()
+                for p in new_participants_raw.split(",")
+                if p.strip()
+            ]
         note = st.text_input("메모(선택)")
         split_mode = st.selectbox("분할 방식", ["equal"], index=0, help="현재는 1/N 균등분할만 지원")
 
@@ -326,9 +334,24 @@ with tabs[0]:
         if amount <= 0:
             st.error("금액을 입력하세요.")
             st.stop()
-        if len(participants) == 0:
+
+        final_participants = list(dict.fromkeys(participants + new_participants))
+        
+        if len(final_participants) == 0:
             st.error("참여자를 1명 이상 선택하세요.")
             st.stop()
+
+        existing = set(member_names)
+        added = False
+
+        for p in new_participants:
+            if p not in existing:
+                members.append({"name": p})
+                added = True
+
+        if added:
+            save_members(event_id, members)
+            member_names = [m["name"] for m in members]
 
         expense_id = f"{len(expenses)+1:04d}_{safe_slug(item)}_{int(amount)}"
         saved_paths = []
@@ -340,7 +363,7 @@ with tabs[0]:
             "payer": payer_final,
             "item": item.strip(),
             "amount": float(amount),
-            "participants": participants,
+            "participants": final_participants,
             "split_mode": split_mode,
             "note": note.strip(),
             "receipt_paths": saved_paths,  # 여러 장 누적 저장
